@@ -100,7 +100,7 @@ export default function Activity({ tasks, now }: ViewProps) {
                   >
                     <span className="num">{day}</span>
                     <span className="dots">
-                      {count > 0 && <i className={hasMissed ? 'miss' : 'due'} />}
+                      {(count > 0 || hasMissed) && <i className={hasMissed ? 'miss' : 'due'} />}
                       {done > 0 && <i className="ok" />}
                     </span>
                     {count > 1 && <em>{count}</em>}
@@ -127,7 +127,7 @@ export default function Activity({ tasks, now }: ViewProps) {
 
           <div className="panel">
             <h2 className="section-title">{selDate ? formatDate(selected) : 'Selected day'}</h2>
-            {!sel || (sel.deadlines.length === 0 && sel.completedCount === 0) ? (
+            {!sel || (sel.deadlines.length === 0 && sel.rescheduled.length === 0 && sel.completedCount === 0) ? (
               <p className="muted">Nothing scheduled or completed this day.</p>
             ) : (
               <ul className="mini-list">
@@ -145,6 +145,16 @@ export default function Activity({ tasks, now }: ViewProps) {
                     </li>
                   )
                 })}
+                {sel.rescheduled.map((t) => (
+                  <li key={`r-${t.id}`}>
+                    <span className="dot bad" />
+                    <div>
+                      <b>{t.title}</b>
+                      <small>Missed · moved to {formatDate(t.dueDate)}</small>
+                    </div>
+                    <PriorityBadge priority={t.priority} />
+                  </li>
+                ))}
                 {sel.completedCount > 0 && <li className="note">✅ {sel.completedCount} task{sel.completedCount === 1 ? '' : 's'} completed this day</li>}
               </ul>
             )}

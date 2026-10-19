@@ -7,7 +7,13 @@ const THEME_KEY = 'momentum.theme.v1'
 export const LIMITS = { title: 120, description: 1000, tasks: 2000 } as const
 
 const isPriority = (v: unknown): v is Priority => typeof v === 'string' && (PRIORITIES as string[]).includes(v)
-const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+/** A finite epoch-ms value that `Date` can represent (rejects 1e20, NaN, Infinity). */
+const isTimestamp = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 8.64e15
+
+/** Trim and cap user text so no code path can store an oversized task. */
+export function clampText(s: string, max: number): string {
+  return s.slice(0, max)
+}
 
 /** Validate untrusted data (storage can be edited or corrupted) into a Task, or null. */
 export function sanitizeTask(raw: unknown): Task | null {
@@ -19,13 +25,14 @@ export function sanitizeTask(raw: unknown): Task | null {
   const dueTime = dueDate && typeof r.dueTime === 'string' && isValidTime(r.dueTime) ? r.dueTime : ''
   return {
     id: r.id,
-    title: r.title.trim().slice(0, LIMITS.title),
-    description: typeof r.description === 'string' ? r.description.slice(0, LIMITS.description) : '',
+    title: clampText(r.title.trim(), LIMITS.title),
+    description: typeof r.description === 'string' ? clampText(r.description, LIMITS.description) : '',
     dueDate,
     dueTime,
     priority: isPriority(r.priority) ? r.priority : 'medium',
-    createdAt: isNum(r.createdAt) ? r.createdAt : Date.now(),
-    completedAt: isNum(r.completedAt) ? r.completedAt : null,
+    createdAt: isTimestamp(r.createdAt) ? r.createdAt : Date.now(),
+    completedAt: isTimestamp(r.completedAt) ? r.completedAt : null,
+    ...(typeof r.missedFrom === 'string' && parseKey(r.missedFrom) ? { missedFrom: r.missedFrom } : {}),
   }
 }
 

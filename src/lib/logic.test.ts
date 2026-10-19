@@ -4,6 +4,8 @@ import { addDays, diffDays, dueInstant, parseKey, relativeDay, toKey } from './d
 import { compareScored, overdueTasks, rankOpenTasks, scoreTask, tierFor } from './priority'
 import { completionStreak, isCompletedLate, monthStats, upcoming } from './stats'
 import { parseTasks, sanitizeTask } from './storage'
+import { indexByDay } from './stats'
+import { reducer } from './useTasks'
 
 const NOW = new Date(2025, 5, 15, 12, 0, 0).getTime() // Jun 15 2025, noon
 
@@ -151,5 +153,65 @@ describe('storage sanitising', () => {
   })
   it('truncates oversized text', () => {
     expect(sanitizeTask({ id: 'a', title: 'x'.repeat(500) })!.title).toHaveLength(120)
+  })
+})
+
+describe('missed deadlines survive rescheduling', () => {
+  const june = new Date(2025, 5, 1)
+  it('counts the miss in the month it happened', () => {
+    const t = mk({ dueDate: '2025-06-25', missedFrom: '2025-06-05' })
+    const s = monthStats([t], june, NOW)
+    expect(s.missed).toBe(1)
+    expect(s.due).toBe(1)
+    expect(s.onTimeRate).toBe(0)
+  })
+  it('does not double count when completed late after a reschedule', () => {
+    const t = mk({ dueDate: '2025-06-10', missedFrom: '2025-06-05', completedAt: new Date(2025, 5, 12).getTime() })
+    expect(monthStats([t], june, NOW).missed).toBe(1)
+  })
+  it('attributes the miss to the original month only', () => {
+    const t = mk({ dueDate: '2025-07-02', missedFrom: '2025-06-28' })
+    expect(monthStats([t], june, NOW).missed).toBe(1)
+    expect(monthStats([t], new Date(2025, 6, 1), NOW).missed).toBe(0)
+  })
+  it('marks the original day on the calendar index', () => {
+    const t = mk({ dueDate: '2025-06-25', missedFrom: '2025-06-05' })
+    const day = indexByDay([t], NOW).get('2025-06-05')!
+    expect(day.missedCount).toBe(1)
+    expect(day.rescheduled).toHaveLength(1)
+    expect(day.deadlines).toHaveLength(0)
+  })
+  it('sanitises missedFrom from storage', () => {
+    expect(sanitizeTask({ id: 'a', title: 'x', missedFrom: '2025-02-31' })!.missedFrom).toBeUndefined()
+    expect(sanitizeTask({ id: 'a', title: 'x', missedFrom: '2025-06-05' })!.missedFrom).toBe('2025-06-05')
+  })
+})
+
+describe('timestamp hardening', () => {
+  it('rejects timestamps Date cannot represent', () => {
+    const t = sanitizeTask({ id: 'a', title: 'x', createdAt: 1e20, completedAt: 1e20 })!
+    expect(t.completedAt).toBeNull()
+    expect(Number.isFinite(new Date(t.createdAt).getTime())).toBe(true)
+  })
+})
+
+describe('reducer', () => {
+  it('records the missed deadline when an overdue task is rescheduled', () => {
+    const t = mk({ id: 'z', dueDate: '2025-06-05' })
+    const [r] = reducer([t], { type: 'reschedule', id: 'z', dueDate: '2025-06-20', dueTime: '', at: NOW })
+    expect(r.missedFrom).toBe('2025-06-05')
+    expect(r.dueDate).toBe('2025-06-20')
+  })
+  it('does not record a miss for an on-time task or keep overwriting the first miss', () => {
+    const ok = mk({ id: 'a', dueDate: '2025-06-20' })
+    expect(reducer([ok], { type: 'reschedule', id: 'a', dueDate: '2025-06-25', dueTime: '', at: NOW })[0].missedFrom).toBeUndefined()
+    const late = mk({ id: 'b', dueDate: '2025-06-05', missedFrom: '2025-06-01' })
+    expect(reducer([late], { type: 'reschedule', id: 'b', dueDate: '2025-06-10', dueTime: '', at: NOW })[0].missedFrom).toBe('2025-06-01')
+  })
+  it('caps oversized input centrally', () => {
+    const t = mk({ id: 'c' })
+    const [r] = reducer([t], { type: 'update', id: 'c', at: NOW, input: { title: 'x'.repeat(999), description: 'y'.repeat(9999), dueDate: '', dueTime: '', priority: 'low' } })
+    expect(r.title).toHaveLength(120)
+    expect(r.description).toHaveLength(1000)
   })
 })

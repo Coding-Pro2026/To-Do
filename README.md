@@ -19,3 +19,12 @@ npm test           # unit tests for dates, priority engine, stats, storage
 ```
 
 Stack: React, TypeScript, Vite, framer-motion, lucide-react.
+
+## Security notes
+- No backend and no network calls: tasks never leave the browser (`localStorage`).
+- All user text is rendered through React (auto-escaped); there is no `dangerouslySetInnerHTML`, `eval` or dynamic script loading.
+- Anything read back from storage is treated as untrusted: shapes, dates, times, priorities and timestamps are validated and repaired, text is length-capped, task count is capped, and corrupt data is ignored.
+- The production build ships a strict Content-Security-Policy (`script-src 'self'`, `connect-src 'none'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`).
+- An error boundary replaces a blank page with a reload / reset screen if rendering ever fails.
+- Dependencies: `npm audit` reports 0 vulnerabilities and the lockfile pins every package to the npm registry.
+- When hosting, also send `X-Frame-Options: DENY` (or CSP `frame-ancestors 'none'`) and `X-Content-Type-Options: nosniff` as response headers; these cannot be set from a `<meta>` tag.

@@ -42,8 +42,13 @@ export function monthStats(tasks: Task[], month: Date, now: number): MonthStats 
       completionsByDay[new Date(t.completedAt).getDate() - 1]++
     }
     const d = parseKey(t.dueDate)
-    if (d && d.getFullYear() === y && d.getMonth() === m) {
-      due++
+    const inDueMonth = d !== null && d.getFullYear() === y && d.getMonth() === m
+    if (inDueMonth) due++
+    // A recorded miss belongs to the month of the deadline that was missed, even after rescheduling.
+    if (t.missedFrom) {
+      const mf = parseKey(t.missedFrom)
+      if (mf && mf.getFullYear() === y && mf.getMonth() === m) missed++
+    } else if (inDueMonth) {
       if (t.completedAt !== null) {
         if (isCompletedLate(t)) missed++
         else onTime++
@@ -77,6 +82,8 @@ export function completionStreak(tasks: Task[], today: Date): number {
 export interface DayInfo {
   key: string
   deadlines: Task[]
+  /** Tasks whose missed deadline fell on this day and were since rescheduled. */
+  rescheduled: Task[]
   completedCount: number
   missedCount: number
 }
@@ -87,7 +94,7 @@ export function indexByDay(tasks: Task[], now: number): Map<string, DayInfo> {
   const get = (key: string) => {
     let e = map.get(key)
     if (!e) {
-      e = { key, deadlines: [], completedCount: 0, missedCount: 0 }
+      e = { key, deadlines: [], rescheduled: [], completedCount: 0, missedCount: 0 }
       map.set(key, e)
     }
     return e
@@ -97,7 +104,12 @@ export function indexByDay(tasks: Task[], now: number): Map<string, DayInfo> {
       const e = get(t.dueDate)
       e.deadlines.push(t)
       const due = dueInstant(t.dueDate, t.dueTime)!
-      if (t.completedAt !== null ? t.completedAt > due : now > due) e.missedCount++
+      if (!t.missedFrom && (t.completedAt !== null ? t.completedAt > due : now > due)) e.missedCount++
+    }
+    if (t.missedFrom && parseKey(t.missedFrom)) {
+      const e = get(t.missedFrom)
+      e.missedCount++
+      e.rescheduled.push(t)
     }
     if (t.completedAt !== null) get(toKey(new Date(t.completedAt))).completedCount++
   }
