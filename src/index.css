@@ -272,3 +272,9 @@ i.due { background: var(--medium); } i.miss { background: var(--urgent); } i.ok 
   .stat strong { font-size: 1.7rem; }
   .rank { display: none; }
 }
+
+/* ---------- crash screen ---------- */
+.crash { position: relative; z-index: 1; max-width: 480px; margin: 18vh auto 0; padding: 0 20px; display: flex; flex-direction: column; gap: 14px; text-align: center; }
+.crash h1 { font-size: 1.6rem; font-weight: 800; }
+.crash p { color: var(--muted); }
+.crash-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
